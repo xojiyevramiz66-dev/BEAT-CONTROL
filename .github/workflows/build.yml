@@ -20,13 +20,12 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: 3. Выдача прав на выполнение gradlew
-        run: chmod +x gradlew
+      - name: 3. Установка и настройка Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: 4. Сборка APK через Gradle
-        run: ./gradlew assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
 
       - name: 5. Проверка наличия и ненулевого размера APK
         run: |
