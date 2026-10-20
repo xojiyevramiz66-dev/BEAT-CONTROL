@@ -1,302 +1,638 @@
-package com.beatcontrol.app
+package com.example.beatcontrol
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.delay
+import kotlin.random.Random
+
+private val Background = Color(0xFF080B18)
+private val Panel = Color(0xFF12182B)
+private val NeonBlue = Color(0xFF36D9FF)
+private val NeonPink = Color(0xFFFF3D81)
+private val NeonGreen = Color(0xFF7CFFB2)
+private val TextWhite = Color(0xFFF4F7FF)
+private val Muted = Color(0xFF8C96B5)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = Color(0xFF00F0FF),
-                    secondary = Color(0xFFFF007F),
-                    background = Color(0xFF0A0A12),
-                    surface = Color(0xFF141423)
+                    primary = NeonBlue,
+                    background = Background,
+                    surface = Panel
                 )
             ) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AppNavigation()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Background
+                ) {
+                    BeatControlApp()
                 }
             }
         }
     }
 }
 
-sealed class Screen(val route: String) {
-    object MainMenu : Screen("main_menu")
-    object Game : Screen("game")
-    object Settings : Screen("settings")
-    object Results : Screen("results")
+private enum class Screen {
+    HOME, GAME, RESULTS, SETTINGS
 }
 
-@Composable
-fun AppNavigation() {
-    val navController = rememberNavController()
+private data class Obstacle(
+    val id: Int,
+    val lane: Int,
+    val y: Float
+)
 
-    NavHost(navController = navController, startDestination = Screen.MainMenu.route) {
-        composable(Screen.MainMenu.route) {
-            MainMenuScreen(
-                onPlayClick = { navController.navigate(Screen.Game.route) },
-                onSettingsClick = { navController.navigate(Screen.Settings.route) }
-            )
-        }
-        composable(Screen.Game.route) {
-            GameScreen(
-                onGameOver = { navController.navigate(Screen.Results.route) },
-                onPauseClick = { navController.popBackStack() }
-            )
-        }
-        composable(Screen.Settings.route) {
-            SettingsScreen(onBack = { navController.popBackStack() })
-        }
-        composable(Screen.Results.route) {
-            ResultsScreen(
-                onRestart = { 
-                    navController.popBackStack(Screen.MainMenu.route, inclusive = false)
-                    navController.navigate(Screen.Game.route)
-                },
-                onHome = { navController.popBackStack(Screen.MainMenu.route, inclusive = false) }
-            )
-        }
+@Composable
+private fun BeatControlApp() {
+    var screen by remember { mutableStateOf(Screen.HOME) }
+    var finalScore by remember { mutableIntStateOf(0) }
+    var bestScore by remember { mutableIntStateOf(0) }
+    var soundEnabled by remember { mutableStateOf(true) }
+    var sensitivity by remember { mutableIntStateOf(5) }
+
+    when (screen) {
+        Screen.HOME -> HomeScreen(
+            bestScore = bestScore,
+            onPlay = { screen = Screen.GAME },
+            onSettings = { screen = Screen.SETTINGS }
+        )
+
+        Screen.GAME -> GameScreen(
+            sensitivity = sensitivity,
+            onGameOver = { score ->
+                finalScore = score
+                if (score > bestScore) bestScore = score
+                screen = Screen.RESULTS
+            },
+            onExit = { screen = Screen.HOME }
+        )
+
+        Screen.RESULTS -> ResultsScreen(
+            score = finalScore,
+            bestScore = bestScore,
+            onRetry = { screen = Screen.GAME },
+            onHome = { screen = Screen.HOME }
+        )
+
+        Screen.SETTINGS -> SettingsScreen(
+            soundEnabled = soundEnabled,
+            sensitivity = sensitivity,
+            onSoundChange = { soundEnabled = it },
+            onSensitivityChange = { sensitivity = it },
+            onBack = { screen = Screen.HOME }
+        )
     }
 }
 
 @Composable
-fun MainMenuScreen(onPlayClick: () -> Unit, onSettingsClick: () -> Unit) {
-    val darkBackground = Color(0xFF0A0A12)
-    val neonCyan = Color(0xFF00F0FF)
-    val neonPink = Color(0xFFFF007F)
-
-    Box(
+private fun HomeScreen(
+    bestScore: Int,
+    onPlay: () -> Unit,
+    onSettings: () -> Unit
+) {
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(darkBackground, Color(0xFF1A0033)))),
-        contentAlignment = Alignment.Center
+            .background(Background)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("BEAT CONTROL", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = neonCyan)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Управляй ритмом", fontSize = 16.sp, color = neonPink)
-            Spacer(modifier = Modifier.height(32.dp))
-            Button(
-                onClick = onPlayClick,
-                modifier = Modifier.width(220.dp).height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = neonCyan)
-            ) {
-                Text("ИГРАТЬ", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 18.sp)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = onSettingsClick,
-                modifier = Modifier.width(220.dp).height(56.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = neonPink)
-            ) {
-                Text("НАСТРОЙКИ", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
-        }
+        Text(
+            text = "BEAT",
+            fontSize = 48.sp,
+            fontWeight = FontWeight.Black,
+            color = NeonBlue
+        )
+
+        Text(
+            text = "CONTROL",
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = NeonPink
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = "CONTROL THE RHYTHM",
+            color = Muted,
+            fontSize = 13.sp,
+            letterSpacing = 3.sp
+        )
+
+        Spacer(Modifier.height(40.dp))
+
+        NeonButton(
+            text = "▶  ИГРАТЬ",
+            onClick = onPlay
+        )
+
+        Spacer(Modifier.height(14.dp))
+
+        NeonButton(
+            text = "⚙  НАСТРОЙКИ",
+            onClick = onSettings,
+            color = Panel
+        )
+
+        Spacer(Modifier.height(28.dp))
+
+        Text(
+            text = "РЕКОРД: $bestScore",
+            color = NeonGreen,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(22.dp))
+
+        Text(
+            text = "Выбирай дорожку и уклоняйся от препятствий.",
+            color = Muted,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
 @Composable
-fun GameScreen(onGameOver: () -> Unit, onPauseClick: () -> Unit) {
-    var score by remember { mutableStateOf(0) }
-    var playerLane by remember { mutableStateOf(1) }
+private fun GameScreen(
+    sensitivity: Int,
+    onGameOver: (Int) -> Unit,
+    onExit: () -> Unit
+) {
+    var playerLane by remember { mutableIntStateOf(1) }
+    var score by remember { mutableIntStateOf(0) }
+    var combo by remember { mutableIntStateOf(0) }
+    var gameOver by remember { mutableStateOf(false) }
+    var nextId by remember { mutableIntStateOf(0) }
+    var tick by remember { mutableLongStateOf(0L) }
 
-    val darkBackground = Color(0xFF0A0A12)
-    val neonCyan = Color(0xFF00F0FF)
+    val obstacles = remember { mutableStateListOf<Obstacle>() }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(darkBackground)
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    if (offset.x < size.width / 2) {
-                        if (playerLane > 0) playerLane--
-                    } else {
-                        if (playerLane < 2) playerLane++
-                    }
-                }
+    val spawnInterval = (850L - score.toLong() * 3L)
+        .coerceAtLeast(350L)
+
+    val speed = (0.018f + score * 0.00008f)
+        .coerceAtMost(0.045f)
+
+    LaunchedEffect(gameOver, tick) {
+        if (gameOver) return@LaunchedEffect
+
+        delay(16L)
+
+        val updated = obstacles.mapNotNull { obstacle ->
+            val newY = obstacle.y + speed
+
+            if (newY > 1.12f) {
+                score += 10
+                combo += 1
+                null
+            } else {
+                obstacle.copy(y = newY)
             }
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val laneWidth = size.width / 3f
-            
-            for (i in 1..2) {
-                drawLine(
-                    color = Color.DarkGray.copy(alpha = 0.5f),
-                    start = Offset(laneWidth * i, 0f),
-                    end = Offset(laneWidth * i, size.height),
-                    strokeWidth = 3f
+        }
+
+        obstacles.clear()
+        obstacles.addAll(updated)
+
+        val hit = obstacles.any { obstacle ->
+            obstacle.lane == playerLane &&
+                obstacle.y >= 0.79f &&
+                obstacle.y <= 0.96f
+        }
+
+        if (hit) {
+            gameOver = true
+            onGameOver(score)
+        } else {
+            tick += 1
+        }
+    }
+
+    LaunchedEffect(gameOver) {
+        if (gameOver) return@LaunchedEffect
+
+        while (!gameOver) {
+            delay(spawnInterval)
+
+            if (!gameOver) {
+                nextId += 1
+
+                val lane = Random.nextInt(0, 3)
+
+                obstacles.add(
+                    Obstacle(
+                        id = nextId,
+                        lane = lane,
+                        y = -0.08f
+                    )
                 )
             }
-
-            val playerX = laneWidth * playerLane + laneWidth / 2f
-            drawCircle(color = neonCyan, radius = 55f, center = Offset(playerX, size.height - 250f))
         }
+    }
 
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Background)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("СЧЁТ: $score", color = neonCyan, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Button(
-                onClick = onPauseClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF141423))
-            ) {
-                Text("ПАУЗА", color = Color.White)
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingsScreen(onBack: () -> Unit) {
-    var musicVol by remember { mutableStateOf(1.0f) }
-    var soundVol by remember { mutableStateOf(1.0f) }
-    var sens by remember { mutableStateOf(1.0f) }
-
-    val darkBackground = Color(0xFF0A0A12)
-    val neonCyan = Color(0xFF00F0FF)
-    val neonPink = Color(0xFFFF007F)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(darkBackground)
-            .padding(24.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
             Text(
-                text = "НАСТРОЙКИ",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = neonCyan,
-                modifier = Modifier.padding(top = 16.dp, bottom = 32.dp)
+                text = "✕",
+                color = TextWhite,
+                fontSize = 26.sp,
+                modifier = Modifier
+                    .clickable(onClick = onExit)
+                    .padding(8.dp)
             )
 
-            Text(text = "Громкость музыки: ${(musicVol * 100).toInt()}%", color = Color.White)
-            Slider(
-                value = musicVol,
-                onValueChange = { musicVol = it },
-                colors = SliderDefaults.colors(thumbColor = neonCyan, activeTrackColor = neonCyan)
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "BEAT CONTROL",
+                    color = NeonBlue,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
+                )
+                Text(
+                    text = "COMBO  x$combo",
+                    color = NeonPink,
+                    fontSize = 12.sp
+                )
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(text = "Громкость эффектов: ${(soundVol * 100).toInt()}%", color = Color.White)
-            Slider(
-                value = soundVol,
-                onValueChange = { soundVol = it },
-                colors = SliderDefaults.colors(thumbColor = neonPink, activeTrackColor = neonPink)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(text = "Чувствительность: ${(sens * 100).toInt()}%", color = Color.White)
-            Slider(
-                value = sens,
-                onValueChange = { sens = it },
-                valueRange = 0.5f..2.0f,
-                colors = SliderDefaults.colors(thumbColor = neonCyan, activeTrackColor = neonCyan)
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            Button(
-                onClick = onBack,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = neonCyan)
-            ) {
-                Text(text = "НАЗАД", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            Column(horizontalAlignment = Alignment.End) {
+                Text("СЧЁТ", color = Muted, fontSize = 11.sp)
+                Text(
+                    text = score.toString(),
+                    color = NeonGreen,
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
+
+        Spacer(Modifier.height(12.dp))
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(
+                    color = Color(0xFF0B1020),
+                    shape = RoundedCornerShape(18.dp)
+                )
+                .clickable {
+                    if (!gameOver) {
+                        // Tap left or right half to change lanes.
+                        // The canvas is divided into three equal lanes.
+                        playerLane = when {
+                            playerLane == 0 -> 1
+                            playerLane == 2 -> 1
+                            else -> playerLane
+                        }
+                    }
+                }
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val laneWidth = size.width / 3f
+                val height = size.height
+
+                for (i in 1..2) {
+                    val x = laneWidth * i
+
+                    drawLine(
+                        color = NeonBlue.copy(alpha = 0.28f),
+                        start = Offset(x, 0f),
+                        end = Offset(x, height),
+                        strokeWidth = 2.dp.toPx()
+                    )
+                }
+
+                // Player danger zone
+                drawLine(
+                    color = NeonPink.copy(alpha = 0.5f),
+                    start = Offset(0f, height * 0.88f),
+                    end = Offset(size.width, height * 0.88f),
+                    strokeWidth = 1.dp.toPx()
+                )
+
+                // Player
+                val playerX = laneWidth * (playerLane + 0.5f)
+                val playerY = height * 0.86f
+
+                drawCircle(
+                    color = NeonBlue.copy(alpha = 0.18f),
+                    radius = 31.dp.toPx(),
+                    center = Offset(playerX, playerY)
+                )
+
+                drawCircle(
+                    color = NeonBlue,
+                    radius = 17.dp.toPx(),
+                    center = Offset(playerX, playerY)
+                )
+
+                drawCircle(
+                    color = Color.White,
+                    radius = 5.dp.toPx(),
+                    center = Offset(playerX, playerY)
+                )
+
+                // Falling obstacles
+                obstacles.forEach { obstacle ->
+                    val centerX = laneWidth * (obstacle.lane + 0.5f)
+                    val centerY = height * obstacle.y
+
+                    drawRoundRect(
+                        color = NeonPink,
+                        topLeft = Offset(
+                            centerX - laneWidth * 0.23f,
+                            centerY - 15.dp.toPx()
+                        ),
+                        size = Size(
+                            laneWidth * 0.46f,
+                            30.dp.toPx()
+                        ),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                            8.dp.toPx()
+                        )
+                    )
+                }
+            }
+
+            Text(
+                text = "НАЖМИ НА ДОРОЖКУ",
+                color = Muted.copy(alpha = 0.65f),
+                fontSize = 10.sp,
+                letterSpacing = 2.sp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 14.dp)
+            )
+
+            // Three independent touch zones for precise lane control.
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 4.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                for (lane in 0..2) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(100.dp)
+                            .clickable {
+                                if (!gameOver) {
+                                    playerLane = lane
+                                }
+                            },
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Text(
+                            text = when (lane) {
+                                0 -> "◀"
+                                1 -> "●"
+                                else -> "▶"
+                            },
+                            color = if (playerLane == lane) {
+                                NeonBlue
+                            } else {
+                                Muted.copy(alpha = 0.5f)
+                            },
+                            fontSize = 24.sp,
+                            modifier = Modifier.padding(bottom = 14.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = "Выбирай одну из трёх дорожек, чтобы избежать столкновения.",
+            color = Muted,
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
 @Composable
-fun ResultsScreen(onRestart: () -> Unit, onHome: () -> Unit) {
-    val darkBackground = Color(0xFF0A0A12)
-    val neonCyan = Color(0xFF00F0FF)
-    val neonPink = Color(0xFFFF007F)
-
-    Box(
+private fun ResultsScreen(
+    score: Int,
+    bestScore: Int,
+    onRetry: () -> Unit,
+    onHome: () -> Unit
+) {
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(darkBackground)
+            .background(Background)
             .padding(24.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        Text(
+            text = "GAME OVER",
+            fontSize = 35.sp,
+            fontWeight = FontWeight.Black,
+            color = NeonPink
+        )
+
+        Spacer(Modifier.height(28.dp))
+
+        Text("ТВОЙ СЧЁТ", color = Muted, fontSize = 14.sp)
+
+        Text(
+            text = score.toString(),
+            color = NeonBlue,
+            fontSize = 56.sp,
+            fontWeight = FontWeight.Black
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = "РЕКОРД: $bestScore",
+            color = NeonGreen,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(36.dp))
+
+        NeonButton(
+            text = "↻  ЕЩЁ РАЗ",
+            onClick = onRetry
+        )
+
+        Spacer(Modifier.height(14.dp))
+
+        NeonButton(
+            text = "⌂  ГЛАВНОЕ МЕНЮ",
+            onClick = onHome,
+            color = Panel
+        )
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    soundEnabled: Boolean,
+    sensitivity: Int,
+    onSoundChange: (Boolean) -> Unit,
+    onSensitivityChange: (Int) -> Unit,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Background)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "НАСТРОЙКИ",
+            color = NeonBlue,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(35.dp))
+
+        Text(
+            text = "Звук: ${if (soundEnabled) "ВКЛ" else "ВЫКЛ"}",
+            color = TextWhite,
+            fontSize = 18.sp
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        NeonButton(
+            text = if (soundEnabled) "Выключить звук" else "Включить звук",
+            onClick = { onSoundChange(!soundEnabled) },
+            color = Panel
+        )
+
+        Spacer(Modifier.height(30.dp))
+
+        Text(
+            text = "Чувствительность: $sensitivity",
+            color = TextWhite,
+            fontSize = 18.sp
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "ИТОГИ УРОВНЯ",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = neonCyan
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "ИГРА ЗАВЕРШЕНА",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = neonPink
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(text = "Счёт: 1000", fontSize = 22.sp, color = Color.White)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Макс. комбо: x10", fontSize = 18.sp, color = Color.LightGray)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Точность: 95.5%", fontSize = 18.sp, color = Color.LightGray)
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            Button(
-                onClick = onRestart,
-                modifier = Modifier.fillMaxWidth(0.8f).height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = neonCyan)
-            ) {
-                Text(text = "ПОВТОРИТЬ", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = onHome,
-                modifier = Modifier.fillMaxWidth(0.8f).height(56.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = neonPink)
-            ) {
-                Text(text = "В МЕНЮ", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            for (value in 1..10) {
+                Text(
+                    text = value.toString(),
+                    color = if (value == sensitivity) NeonBlue else Muted,
+                    fontWeight = if (value == sensitivity) {
+                        FontWeight.Bold
+                    } else {
+                        FontWeight.Normal
+                    },
+                    modifier = Modifier
+                        .clickable { onSensitivityChange(value) }
+                        .padding(4.dp)
+                )
             }
         }
+
+        Spacer(Modifier.height(35.dp))
+
+        NeonButton(
+            text = "НАЗАД",
+            onClick = onBack
+        )
+    }
+}
+
+@Composable
+private fun NeonButton(
+    text: String,
+    onClick: () -> Unit,
+    color: Color = NeonBlue
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = color,
+            contentColor = if (color == NeonBlue) {
+                Background
+            } else {
+                TextWhite
+            }
+        )
+    ) {
+        Text(
+            text = text,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
