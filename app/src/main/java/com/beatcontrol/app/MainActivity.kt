@@ -1,4 +1,4 @@
-package com.example.beatcontrol
+package com.beatcontrol.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
