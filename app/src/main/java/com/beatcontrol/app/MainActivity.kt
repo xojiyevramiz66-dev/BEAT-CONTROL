@@ -1,3 +1,4 @@
+
 package com.beatcontrol.app
 
 import android.content.Context
@@ -48,6 +49,7 @@ private val Gold = Color(0xFFFFD166)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -303,12 +305,18 @@ private fun GameScreen(
     }
 
     var lastTapTime by remember { mutableLongStateOf(0L) }
+
     var lastFrameTime by remember {
         mutableLongStateOf(SystemClock.elapsedRealtime())
     }
 
     var nextId by remember { mutableIntStateOf(0) }
     var lastSpawnBeat by remember { mutableLongStateOf(-1L) }
+
+    // Исправление: запоминаем время трека для обнаружения зацикливания.
+    var lastTrackPositionMs by remember {
+        mutableLongStateOf(-1L)
+    }
 
     val gameStartedAt = remember {
         mutableLongStateOf(SystemClock.elapsedRealtime())
@@ -324,7 +332,6 @@ private fun GameScreen(
     val latestScore by rememberUpdatedState(score)
     val latestPlayerLane by rememberUpdatedState(playerLane)
     val latestGameOver by rememberUpdatedState(gameOver)
-    val latestPaused by rememberUpdatedState(isPaused)
     val latestOnGameOver by rememberUpdatedState(onGameOver)
 
     val beatDuration = 60_000L / bpm.coerceIn(60, 200)
@@ -489,9 +496,7 @@ private fun GameScreen(
                 score += 25 + (combo / 10) * 5
                 combo++
 
-                playTone(
-                    ToneGenerator.TONE_PROP_ACK
-                )
+                playTone(ToneGenerator.TONE_PROP_ACK)
             }
 
             distance <= 180L -> {
@@ -500,9 +505,7 @@ private fun GameScreen(
                 score += 10 + (combo / 10) * 2
                 combo++
 
-                playTone(
-                    ToneGenerator.TONE_PROP_BEEP
-                )
+                playTone(ToneGenerator.TONE_PROP_BEEP)
             }
 
             else -> {
@@ -547,8 +550,24 @@ private fun GameScreen(
                 0.95f + latestScore * 0.0015f
                 ).coerceAtMost(1.8f)
 
-            // Препятствия появляются по выбранному BPM.
-            val trackTime = timelinePositionMs() - beatOffsetMs
+            // Позиция текущего воспроизведения музыки.
+            val currentTrackPositionMs = timelinePositionMs()
+
+            // ИСПРАВЛЕНИЕ:
+            // если музыка вернулась к началу, сбрасываем счётчик битов.
+            // Благодаря этому препятствия продолжают появляться при повторе.
+            if (mediaPlayer != null && mediaReady) {
+                if (
+                    lastTrackPositionMs >= 0L &&
+                    currentTrackPositionMs + 250L < lastTrackPositionMs
+                ) {
+                    lastSpawnBeat = -1L
+                }
+
+                lastTrackPositionMs = currentTrackPositionMs
+            }
+
+            val trackTime = currentTrackPositionMs - beatOffsetMs
 
             val beatIndex = if (trackTime >= 0L) {
                 trackTime / beatDuration
@@ -767,9 +786,7 @@ private fun GameScreen(
                 "♫ СМЕНИТЬ ТРЕК"
             },
             {
-                audioPicker.launch(
-                    arrayOf("audio/*")
-                )
+                audioPicker.launch(arrayOf("audio/*"))
             },
             Panel
         )
@@ -803,14 +820,14 @@ private fun GameScreen(
             )
 
             Slider(
-    value = bpm.toFloat(),
-    onValueChange = { value ->
-        onBpmChange(value.toInt())
-    },
-    valueRange = 60f..200f,
-    steps = 139,
-    modifier = Modifier.weight(1f)
-)
+                value = bpm.toFloat(),
+                onValueChange = { value ->
+                    onBpmChange(value.toInt())
+                },
+                valueRange = 60f..200f,
+                steps = 139,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Row(
@@ -829,9 +846,7 @@ private fun GameScreen(
                 fontSize = 22.sp,
                 modifier = Modifier
                     .clickable {
-                        onBeatOffsetChange(
-                            beatOffsetMs - 50
-                        )
+                        onBeatOffsetChange(beatOffsetMs - 50)
                     }
                     .padding(horizontal = 12.dp)
             )
@@ -842,9 +857,7 @@ private fun GameScreen(
                 fontSize = 22.sp,
                 modifier = Modifier
                     .clickable {
-                        onBeatOffsetChange(
-                            beatOffsetMs + 50
-                        )
+                        onBeatOffsetChange(beatOffsetMs + 50)
                     }
                     .padding(horizontal = 12.dp)
             )
@@ -947,9 +960,7 @@ private fun GameScreen(
                             laneWidth * 0.44f,
                             30.dp.toPx()
                         ),
-                        cornerRadius = CornerRadius(
-                            8.dp.toPx()
-                        )
+                        cornerRadius = CornerRadius(8.dp.toPx())
                     )
 
                     drawRoundRect(
@@ -962,9 +973,7 @@ private fun GameScreen(
                             laneWidth * 0.34f,
                             4.dp.toPx()
                         ),
-                        cornerRadius = CornerRadius(
-                            3.dp.toPx()
-                        )
+                        cornerRadius = CornerRadius(3.dp.toPx())
                     )
                 }
             }
