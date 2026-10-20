@@ -89,9 +89,7 @@ private fun BeatControlApp() {
     var finalScore by remember { mutableIntStateOf(0) }
 
     var bestScore by remember {
-        mutableIntStateOf(
-            preferences.getInt("best_score", 0)
-        )
+        mutableIntStateOf(preferences.getInt("best_score", 0))
     }
 
     var soundEnabled by remember {
@@ -246,8 +244,8 @@ private fun GameScreen(
 
     var gameOver by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
-
     var nextId by remember { mutableIntStateOf(0) }
+
     var feedback by remember { mutableStateOf("ГОТОВ?") }
     var feedbackColor by remember { mutableStateOf(NeonBlue) }
 
@@ -260,14 +258,8 @@ private fun GameScreen(
         mutableLongStateOf(SystemClock.elapsedRealtime())
     }
 
-    // Время, проведённое на паузе, не учитывается в ритме.
-    val pausedDuration = remember {
-        mutableLongStateOf(0L)
-    }
-
-    val pauseStartedAt = remember {
-        mutableLongStateOf(0L)
-    }
+    val pausedDuration = remember { mutableLongStateOf(0L) }
+    val pauseStartedAt = remember { mutableLongStateOf(0L) }
 
     val obstacles = remember {
         mutableStateListOf<Obstacle>()
@@ -277,6 +269,7 @@ private fun GameScreen(
     val latestPlayerLane by rememberUpdatedState(playerLane)
     val latestGameOver by rememberUpdatedState(gameOver)
     val latestPaused by rememberUpdatedState(isPaused)
+    val latestOnGameOver by rememberUpdatedState(onGameOver)
 
     val bpm = (120 + score / 50).coerceAtMost(180)
     val beatDuration = 60_000L / bpm
@@ -291,6 +284,9 @@ private fun GameScreen(
         }
     }
 
+    // Эффекты всегда используют актуальный генератор звука.
+    val latestToneGenerator by rememberUpdatedState(toneGenerator)
+
     DisposableEffect(toneGenerator) {
         onDispose {
             runCatching {
@@ -301,7 +297,7 @@ private fun GameScreen(
 
     fun playTone(tone: Int, duration: Int = 70) {
         runCatching {
-            toneGenerator?.startTone(tone, duration)
+            latestToneGenerator?.startTone(tone, duration)
         }
     }
 
@@ -327,7 +323,6 @@ private fun GameScreen(
 
         val now = SystemClock.elapsedRealtime()
 
-        // Ограничиваем слишком частые нажатия.
         if (now - lastTapTime < 120L) return
         lastTapTime = now
 
@@ -358,20 +353,16 @@ private fun GameScreen(
             distanceToBeat <= 85L -> {
                 feedback = "PERFECT!"
                 feedbackColor = Gold
-
                 score += 25 + (combo / 10) * 5
-                combo += 1
-
+                combo++
                 playTone(ToneGenerator.TONE_PROP_ACK)
             }
 
             distanceToBeat <= 170L -> {
                 feedback = "GOOD!"
                 feedbackColor = NeonGreen
-
                 score += 10 + (combo / 10) * 2
-                combo += 1
-
+                combo++
                 playTone(ToneGenerator.TONE_PROP_BEEP)
             }
 
@@ -379,26 +370,24 @@ private fun GameScreen(
                 feedback = "KEEP THE BEAT"
                 feedbackColor = Muted
                 combo = 0
-
                 playTone(ToneGenerator.TONE_PROP_BEEP2, 45)
             }
         }
     }
 
-    // Движение препятствий и проверка столкновений.
+    // Обновление движения и столкновений.
     LaunchedEffect(gameOver, isPaused) {
         if (gameOver || isPaused) return@LaunchedEffect
 
         lastFrameTime = SystemClock.elapsedRealtime()
 
-        while (true) {
+        while (!gameOver && !isPaused) {
             delay(16L)
 
             val now = SystemClock.elapsedRealtime()
-
             val delta = (
-                (now - lastFrameTime).coerceIn(1L, 50L)
-            ) / 1000f
+                now - lastFrameTime
+            ).coerceIn(1L, 50L) / 1000f
 
             lastFrameTime = now
 
@@ -412,11 +401,13 @@ private fun GameScreen(
             val updated = obstacles.mapNotNull { obstacle ->
                 val newY = obstacle.y + speed * delta
 
-                // Проверяем весь путь препятствия между кадрами.
+                // Учитываем прохождение препятствия через зону игрока.
+                val crossesPlayerZone =
+                    obstacle.y <= 0.91f && newY >= 0.80f
+
                 if (
                     obstacle.lane == latestPlayerLane &&
-                    obstacle.y <= 0.91f &&
-                    newY >= 0.80f
+                    crossesPlayerZone
                 ) {
                     hit = true
                 }
@@ -439,26 +430,27 @@ private fun GameScreen(
             if (hit && !latestGameOver) {
                 gameOver = true
                 playTone(ToneGenerator.TONE_PROP_NACK, 220)
-                onGameOver(score)
+
+                // Берём актуальный счёт, а не значение из старого кадра.
+                latestOnGameOver(latestScore + passedCount * 10)
                 break
             }
         }
     }
 
-    // Генерация препятствий.
+    // Создание препятствий.
     LaunchedEffect(gameOver, isPaused) {
         if (gameOver || isPaused) return@LaunchedEffect
 
-        while (true) {
+        while (!gameOver && !isPaused) {
             val currentBpm =
                 (120 + latestScore / 50).coerceAtMost(180)
 
             val spawnInterval = (60_000L / currentBpm) * 2L
-
             delay(spawnInterval)
 
             if (!gameOver && !isPaused) {
-                nextId += 1
+                nextId++
 
                 val occupiedLanes = obstacles
                     .filter { it.y < 0.12f }
@@ -486,13 +478,13 @@ private fun GameScreen(
         }
     }
 
-    // Метроном синхронизируется с игровым временем.
+    // Метроном.
     LaunchedEffect(gameOver, isPaused, bpm, soundEnabled) {
         if (gameOver || isPaused || !soundEnabled) {
             return@LaunchedEffect
         }
 
-        while (true) {
+        while (!gameOver && !isPaused) {
             val now = SystemClock.elapsedRealtime()
 
             val elapsed = (
@@ -595,12 +587,7 @@ private fun GameScreen(
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(
-                        gameOver,
-                        isPaused,
-                        sensitivity,
-                        bpm
-                    ) {
+                    .pointerInput(gameOver, isPaused, sensitivity, bpm) {
                         detectTapGestures { offset ->
                             val laneWidth = size.width / 3f
                             val lane = (offset.x / laneWidth)
@@ -868,9 +855,7 @@ private fun SettingsScreen(
         Slider(
             value = sensitivity.toFloat(),
             onValueChange = {
-                onSensitivityChange(
-                    it.toInt().coerceIn(1, 10)
-                )
+                onSensitivityChange(it.toInt().coerceIn(1, 10))
             },
             valueRange = 1f..10f,
             steps = 8,
