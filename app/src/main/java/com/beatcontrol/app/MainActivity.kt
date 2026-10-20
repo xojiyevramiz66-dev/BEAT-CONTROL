@@ -33,7 +33,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -289,6 +292,15 @@ private fun GameScreen(
     onExit: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var isDetectingBpm by remember {
+        mutableStateOf(false)
+    }
+
+    var bpmDetectionMessage by remember {
+        mutableStateOf("Выбери песню и определи её BPM")
+    }
 
     var playerLane by remember { mutableIntStateOf(1) }
     var score by remember { mutableIntStateOf(0) }
@@ -313,7 +325,6 @@ private fun GameScreen(
     var nextId by remember { mutableIntStateOf(0) }
     var lastSpawnBeat by remember { mutableLongStateOf(-1L) }
 
-    // Исправление: запоминаем время трека для обнаружения зацикливания.
     var lastTrackPositionMs by remember {
         mutableLongStateOf(-1L)
     }
@@ -550,12 +561,8 @@ private fun GameScreen(
                 0.95f + latestScore * 0.0015f
                 ).coerceAtMost(1.8f)
 
-            // Позиция текущего воспроизведения музыки.
             val currentTrackPositionMs = timelinePositionMs()
 
-            // ИСПРАВЛЕНИЕ:
-            // если музыка вернулась к началу, сбрасываем счётчик битов.
-            // Благодаря этому препятствия продолжают появляться при повторе.
             if (mediaPlayer != null && mediaReady) {
                 if (
                     lastTrackPositionMs >= 0L &&
@@ -653,7 +660,6 @@ private fun GameScreen(
         }
     }
 
-    // Метроном использует позицию аудиотрека.
     LaunchedEffect(
         gameOver,
         isPaused,
@@ -809,6 +815,65 @@ private fun GameScreen(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+
+        // Автоматическое определение темпа выбранной песни.
+        NeonButton(
+            text = if (isDetectingBpm) {
+                "АНАЛИЗИРУЕМ МУЗЫКУ..."
+            } else {
+                "♫ ОПРЕДЕЛИТЬ BPM АВТОМАТИЧЕСКИ"
+            },
+            onClick = {
+                val selectedUri = musicUri
+
+                if (!isDetectingBpm) {
+                    if (selectedUri == null) {
+                        bpmDetectionMessage =
+                            "Сначала выбери аудиофайл"
+                    } else {
+                        isDetectingBpm = true
+                        bpmDetectionMessage = "Анализируем песню..."
+
+                        scope.launch {
+                            try {
+                                val detectedBpm =
+                                    withContext(Dispatchers.IO) {
+                                        BeatDetector.detectBpm(
+                                            context,
+                                            selectedUri
+                                        )
+                                    }
+
+                                if (detectedBpm != null) {
+                                    onBpmChange(detectedBpm)
+                                    bpmDetectionMessage =
+                                        "Определён темп: $detectedBpm BPM"
+                                } else {
+                                    bpmDetectionMessage =
+                                        "Не удалось определить BPM. Попробуй другой трек."
+                                }
+                            } catch (e: Exception) {
+                                bpmDetectionMessage =
+                                    "Ошибка анализа аудио: проверь файл"
+                            } finally {
+                                isDetectingBpm = false
+                            }
+                        }
+                    }
+                }
+            },
+            color = Panel
+        )
+
+        Text(
+            text = bpmDetectionMessage,
+            color = Muted,
+            fontSize = 10.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(4.dp))
 
         Row(
             verticalAlignment = Alignment.CenterVertically
