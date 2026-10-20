@@ -1,3 +1,4 @@
+
 package com.beatcontrol.app
 
 import android.content.Context
@@ -11,33 +12,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -51,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlin.math.min
 import kotlin.random.Random
 
 private val Background = Color(0xFF080B18)
@@ -60,6 +40,7 @@ private val NeonPink = Color(0xFFFF3D81)
 private val NeonGreen = Color(0xFF7CFFB2)
 private val TextWhite = Color(0xFFF4F7FF)
 private val Muted = Color(0xFF8C96B5)
+private val Gold = Color(0xFFFFD166)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,36 +89,44 @@ private fun BeatControlApp() {
     var screen by remember { mutableStateOf(Screen.HOME) }
     var finalScore by remember { mutableIntStateOf(0) }
 
-    var bestScore by remember(preferences) {
+    var bestScore by remember {
         mutableIntStateOf(
             preferences.getInt("best_score", 0)
         )
     }
 
-    var soundEnabled by remember(preferences) {
+    var soundEnabled by remember {
         mutableStateOf(
             preferences.getBoolean("sound_enabled", true)
         )
     }
 
-    var sensitivity by remember(preferences) {
+    var sensitivity by remember {
         mutableIntStateOf(
-            preferences.getInt("sensitivity", 5)
-                .coerceIn(1, 10)
+            preferences.getInt("sensitivity", 5).coerceIn(1, 10)
         )
     }
 
-    fun saveSensitivity(value: Int) {
-        sensitivity = value.coerceIn(1, 10)
+    fun saveScore(score: Int) {
+        if (score > bestScore) {
+            bestScore = score
+            preferences.edit()
+                .putInt("best_score", score)
+                .apply()
+        }
+    }
+
+    fun changeSound(enabled: Boolean) {
+        soundEnabled = enabled
         preferences.edit()
-            .putInt("sensitivity", sensitivity)
+            .putBoolean("sound_enabled", enabled)
             .apply()
     }
 
-    fun saveSound(value: Boolean) {
-        soundEnabled = value
+    fun changeSensitivity(value: Int) {
+        sensitivity = value.coerceIn(1, 10)
         preferences.edit()
-            .putBoolean("sound_enabled", value)
+            .putInt("sensitivity", sensitivity)
             .apply()
     }
 
@@ -153,14 +142,7 @@ private fun BeatControlApp() {
             soundEnabled = soundEnabled,
             onGameOver = { score ->
                 finalScore = score
-
-                if (score > bestScore) {
-                    bestScore = score
-                    preferences.edit()
-                        .putInt("best_score", score)
-                        .apply()
-                }
-
+                saveScore(score)
                 screen = Screen.RESULTS
             },
             onExit = { screen = Screen.HOME }
@@ -176,8 +158,8 @@ private fun BeatControlApp() {
         Screen.SETTINGS -> SettingsScreen(
             soundEnabled = soundEnabled,
             sensitivity = sensitivity,
-            onSoundChange = ::saveSound,
-            onSensitivityChange = ::saveSensitivity,
+            onSoundChange = ::changeSound,
+            onSensitivityChange = ::changeSensitivity,
             onBack = { screen = Screen.HOME }
         )
     }
@@ -199,7 +181,7 @@ private fun HomeScreen(
     ) {
         Text(
             text = "BEAT",
-            fontSize = 48.sp,
+            fontSize = 52.sp,
             fontWeight = FontWeight.Black,
             color = NeonBlue
         )
@@ -211,46 +193,43 @@ private fun HomeScreen(
             color = NeonPink
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
         Text(
-            text = "CONTROL THE RHYTHM",
+            text = "FEEL THE RHYTHM",
             color = Muted,
             fontSize = 13.sp,
             letterSpacing = 3.sp
         )
 
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(38.dp))
 
-        NeonButton(
-            text = "▶  ИГРАТЬ",
-            onClick = onPlay
-        )
+        NeonButton("▶  ИГРАТЬ", onPlay)
 
         Spacer(Modifier.height(14.dp))
 
         NeonButton(
-            text = "⚙  НАСТРОЙКИ",
-            onClick = onSettings,
+            "⚙  НАСТРОЙКИ",
+            onSettings,
             color = Panel
         )
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(30.dp))
 
         Text(
             text = "РЕКОРД: $bestScore",
             color = NeonGreen,
-            fontSize = 16.sp,
+            fontSize = 19.sp,
             fontWeight = FontWeight.Bold
         )
 
         Spacer(Modifier.height(22.dp))
 
         Text(
-            text = "Выбирай дорожку и уклоняйся от препятствий.",
+            text = "Уклоняйся от препятствий и нажимай в ритм!",
             color = Muted,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            fontSize = 13.sp
         )
     }
 }
@@ -270,7 +249,15 @@ private fun GameScreen(
     var isPaused by remember { mutableStateOf(false) }
 
     var nextId by remember { mutableIntStateOf(0) }
+    var feedback by remember { mutableStateOf("ГОТОВ?") }
+    var feedbackColor by remember { mutableStateOf(NeonBlue) }
+
+    var lastTapTime by remember { mutableLongStateOf(0L) }
     var lastFrameTime by remember {
+        mutableLongStateOf(SystemClock.elapsedRealtime())
+    }
+
+    val gameStartedAt = remember {
         mutableLongStateOf(SystemClock.elapsedRealtime())
     }
 
@@ -278,10 +265,14 @@ private fun GameScreen(
         mutableStateListOf<Obstacle>()
     }
 
+    val latestScore by rememberUpdatedState(score)
+    val bpm = (120 + score / 50).coerceAtMost(180)
+    val beatDuration = 60_000L / bpm
+
     val toneGenerator = remember(soundEnabled) {
         if (soundEnabled) {
             runCatching {
-                ToneGenerator(AudioManager.STREAM_MUSIC, 75)
+                ToneGenerator(AudioManager.STREAM_MUSIC, 70)
             }.getOrNull()
         } else {
             null
@@ -290,38 +281,98 @@ private fun GameScreen(
 
     DisposableEffect(toneGenerator) {
         onDispose {
-            toneGenerator?.release()
+            runCatching { toneGenerator?.release() }
         }
     }
 
-    // Движение зависит от прошедшего времени, а не от FPS.
-    LaunchedEffect(gameOver, isPaused) {
-        if (gameOver || isPaused) {
-            return@LaunchedEffect
+    fun playTone(tone: Int, duration: Int = 70) {
+        runCatching {
+            toneGenerator?.startTone(tone, duration)
         }
+    }
+
+    fun moveToLane(target: Int) {
+        if (gameOver || isPaused) return
+
+        val now = SystemClock.elapsedRealtime()
+
+        // Ограничение частоты нажатий защищает от случайного спама.
+        if (now - lastTapTime < 120L) return
+        lastTapTime = now
+
+        val destination = target.coerceIn(0, 2)
+
+        playerLane = if (sensitivity <= 3) {
+            when {
+                destination > playerLane ->
+                    (playerLane + 1).coerceAtMost(2)
+
+                destination < playerLane ->
+                    (playerLane - 1).coerceAtLeast(0)
+
+                else -> playerLane
+            }
+        } else {
+            destination
+        }
+
+        // Оцениваем близость нажатия к ближайшей доле.
+        val elapsed = (now - gameStartedAt.longValue).coerceAtLeast(0L)
+        val phase = elapsed % beatDuration
+        val distanceToBeat = min(phase, beatDuration - phase)
+
+        when {
+            distanceToBeat <= 85L -> {
+                feedback = "PERFECT!"
+                feedbackColor = Gold
+                score += 25
+                combo += 1
+                playTone(ToneGenerator.TONE_PROP_ACK)
+            }
+
+            distanceToBeat <= 170L -> {
+                feedback = "GOOD!"
+                feedbackColor = NeonGreen
+                score += 10
+                combo += 1
+                playTone(ToneGenerator.TONE_PROP_BEEP)
+            }
+
+            else -> {
+                feedback = "KEEP THE BEAT"
+                feedbackColor = Muted
+                combo = 0
+                playTone(ToneGenerator.TONE_PROP_BEEP2, 45)
+            }
+        }
+    }
+
+    LaunchedEffect(gameOver, isPaused) {
+        if (gameOver || isPaused) return@LaunchedEffect
 
         lastFrameTime = SystemClock.elapsedRealtime()
 
-        while (!gameOver && !isPaused) {
+        while (true) {
             delay(16L)
 
             val now = SystemClock.elapsedRealtime()
-
-            val deltaSeconds =
-                ((now - lastFrameTime).coerceIn(1L, 50L)) / 1000f
+            val delta = (
+                (now - lastFrameTime).coerceIn(1L, 50L)
+            ) / 1000f
 
             lastFrameTime = now
 
-            // Скорость постепенно увеличивается с ростом счёта.
-            val speedPerSecond =
-                (1.08f + score * 0.0048f).coerceAtMost(2.7f)
+            val speed = (
+                0.95f + latestScore * 0.0015f
+            ).coerceAtMost(1.8f)
+
+            var passedCount = 0
 
             val updated = obstacles.mapNotNull { obstacle ->
-                val newY = obstacle.y + speedPerSecond * deltaSeconds
+                val newY = obstacle.y + speed * delta
 
-                if (newY > 1.12f) {
-                    score += 10
-                    combo += 1
+                if (newY > 1.08f) {
+                    passedCount++
                     null
                 } else {
                     obstacle.copy(y = newY)
@@ -331,46 +382,59 @@ private fun GameScreen(
             obstacles.clear()
             obstacles.addAll(updated)
 
+            if (passedCount > 0) {
+                score += passedCount * 10
+                combo += passedCount
+            }
+
             val hit = obstacles.any { obstacle ->
                 obstacle.lane == playerLane &&
-                    obstacle.y >= 0.79f &&
-                    obstacle.y <= 0.96f
+                    obstacle.y >= 0.80f &&
+                    obstacle.y <= 0.91f
             }
 
             if (hit) {
                 gameOver = true
-
-                runCatching {
-                    toneGenerator?.startTone(
-                        ToneGenerator.TONE_PROP_NACK,
-                        220
-                    )
-                }
-
+                playTone(ToneGenerator.TONE_PROP_NACK, 220)
                 onGameOver(score)
+                break
             }
         }
     }
 
-    // Интервал появления пересчитывается при каждом цикле.
     LaunchedEffect(gameOver, isPaused) {
-        if (gameOver || isPaused) {
-            return@LaunchedEffect
-        }
+        if (gameOver || isPaused) return@LaunchedEffect
 
-        while (!gameOver && !isPaused) {
-            val spawnInterval =
-                (850L - score.toLong() * 3L).coerceAtLeast(350L)
+        while (true) {
+            val currentBpm = (120 + latestScore / 50).coerceAtMost(180)
+            val spawnInterval = (60_000L / currentBpm) * 2L
 
             delay(spawnInterval)
 
             if (!gameOver && !isPaused) {
                 nextId += 1
 
+                // Сохраняем хотя бы одну свободную дорожку,
+                // чтобы препятствия не перекрывали все три пути.
+                val occupiedLanes = obstacles
+                    .filter { it.y < 0.12f }
+                    .map { it.lane }
+                    .toSet()
+
+                val available = (0..2).filterNot {
+                    it in occupiedLanes
+                }
+
+                val lane = if (available.isNotEmpty()) {
+                    available.random()
+                } else {
+                    Random.nextInt(0, 3)
+                }
+
                 obstacles.add(
                     Obstacle(
                         id = nextId,
-                        lane = Random.nextInt(0, 3),
+                        lane = lane,
                         y = -0.08f
                     )
                 )
@@ -382,7 +446,7 @@ private fun GameScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -392,38 +456,29 @@ private fun GameScreen(
             Text(
                 text = "✕",
                 color = TextWhite,
-                fontSize = 26.sp,
+                fontSize = 25.sp,
                 modifier = Modifier
                     .clickable(onClick = onExit)
                     .padding(8.dp)
             )
 
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "BEAT CONTROL",
                     color = NeonBlue,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
+                    fontSize = 16.sp
                 )
 
                 Text(
-                    text = "COMBO  x$combo",
+                    text = "$bpm BPM  •  COMBO x${combo}",
                     color = NeonPink,
                     fontSize = 12.sp
                 )
             }
 
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    text = "СЧЁТ",
-                    color = Muted,
-                    fontSize = 11.sp
-                )
-
+            Column(horizontalAlignment = Alignment.End) {
+                Text("СЧЁТ", color = Muted, fontSize = 11.sp)
                 Text(
                     text = score.toString(),
                     color = NeonGreen,
@@ -444,76 +499,70 @@ private fun GameScreen(
             color = Panel
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = feedback,
+            color = feedbackColor,
+            fontWeight = FontWeight.Black,
+            fontSize = 17.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(8.dp))
 
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .background(
-                    color = Color(0xFF0B1020),
-                    shape = RoundedCornerShape(18.dp)
+                    Color(0xFF0B1020),
+                    RoundedCornerShape(18.dp)
                 )
         ) {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(gameOver, isPaused, sensitivity) {
+                    .pointerInput(gameOver, isPaused, sensitivity, bpm) {
                         detectTapGestures { offset ->
-                            if (!gameOver && !isPaused) {
-                                val laneWidth = size.width / 3f
-
-                                val targetLane =
-                                    (offset.x / laneWidth)
-                                        .toInt()
-                                        .coerceIn(0, 2)
-
-                                // Низкая чувствительность ограничивает
-                                // переключение одной соседней дорожкой.
-                                playerLane = if (sensitivity <= 3) {
-                                    when {
-                                        targetLane > playerLane ->
-                                            (playerLane + 1).coerceAtMost(2)
-
-                                        targetLane < playerLane ->
-                                            (playerLane - 1).coerceAtLeast(0)
-
-                                        else -> playerLane
-                                    }
-                                } else {
-                                    targetLane
-                                }
-                            }
+                            val laneWidth = size.width / 3f
+                            val lane = (offset.x / laneWidth)
+                                .toInt()
+                                .coerceIn(0, 2)
+                            moveToLane(lane)
                         }
                     }
             ) {
                 val laneWidth = size.width / 3f
-                val canvasHeight = size.height
+                val h = size.height
 
+                // Три светящиеся дорожки.
                 for (i in 1..2) {
                     val x = laneWidth * i
-
                     drawLine(
-                        color = NeonBlue.copy(alpha = 0.28f),
+                        color = NeonBlue.copy(alpha = 0.30f),
                         start = Offset(x, 0f),
-                        end = Offset(x, canvasHeight),
+                        end = Offset(x, h),
                         strokeWidth = 2.dp.toPx()
                     )
                 }
 
+                // Линия опасности.
                 drawLine(
-                    color = NeonPink.copy(alpha = 0.5f),
-                    start = Offset(0f, canvasHeight * 0.88f),
-                    end = Offset(size.width, canvasHeight * 0.88f),
-                    strokeWidth = 1.dp.toPx()
+                    color = NeonPink.copy(alpha = 0.65f),
+                    start = Offset(0f, h * 0.87f),
+                    end = Offset(size.width, h * 0.87f),
+                    strokeWidth = 2.dp.toPx()
                 )
 
+                // Игрок.
                 val playerX = laneWidth * (playerLane + 0.5f)
-                val playerY = canvasHeight * 0.86f
+                val playerY = h * 0.86f
 
                 drawCircle(
                     color = NeonBlue.copy(alpha = 0.18f),
-                    radius = 31.dp.toPx(),
+                    radius = 34.dp.toPx(),
                     center = Offset(playerX, playerY)
                 )
 
@@ -529,30 +578,42 @@ private fun GameScreen(
                     center = Offset(playerX, playerY)
                 )
 
+                // Препятствия.
                 obstacles.forEach { obstacle ->
-                    val centerX =
-                        laneWidth * (obstacle.lane + 0.5f)
-
-                    val centerY = canvasHeight * obstacle.y
+                    val x = laneWidth * (obstacle.lane + 0.5f)
+                    val y = h * obstacle.y
 
                     drawRoundRect(
                         color = NeonPink,
                         topLeft = Offset(
-                            centerX - laneWidth * 0.23f,
-                            centerY - 15.dp.toPx()
+                            x - laneWidth * 0.22f,
+                            y - 15.dp.toPx()
                         ),
                         size = Size(
-                            laneWidth * 0.46f,
+                            laneWidth * 0.44f,
                             30.dp.toPx()
                         ),
                         cornerRadius = CornerRadius(8.dp.toPx())
+                    )
+
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.16f),
+                        topLeft = Offset(
+                            x - laneWidth * 0.17f,
+                            y - 10.dp.toPx()
+                        ),
+                        size = Size(
+                            laneWidth * 0.34f,
+                            4.dp.toPx()
+                        ),
+                        cornerRadius = CornerRadius(3.dp.toPx())
                     )
                 }
             }
 
             Text(
-                text = "НАЖМИ НА ДОРОЖКУ",
-                color = Muted.copy(alpha = 0.65f),
+                text = "НАЖИМАЙ НА ДОРОЖКУ",
+                color = Muted.copy(alpha = 0.75f),
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
                 modifier = Modifier
@@ -560,62 +621,13 @@ private fun GameScreen(
                     .padding(top = 14.dp)
             )
 
-            // Нижние зоны управления остаются доступными.
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 4.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                for (lane in 0..2) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(100.dp)
-                            .clickable {
-                                if (!gameOver && !isPaused) {
-                                    playerLane = if (sensitivity <= 3) {
-                                        when {
-                                            lane > playerLane ->
-                                                (playerLane + 1).coerceAtMost(2)
-
-                                            lane < playerLane ->
-                                                (playerLane - 1).coerceAtLeast(0)
-
-                                            else -> playerLane
-                                        }
-                                    } else {
-                                        lane
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.BottomCenter
-                    ) {
-                        Text(
-                            text = when (lane) {
-                                0 -> "◀"
-                                1 -> "●"
-                                else -> "▶"
-                            },
-                            color = if (playerLane == lane) {
-                                NeonBlue
-                            } else {
-                                Muted.copy(alpha = 0.5f)
-                            },
-                            fontSize = 24.sp,
-                            modifier = Modifier.padding(bottom = 14.dp)
-                        )
-                    }
-                }
-            }
-
             if (isPaused && !gameOver) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .background(
-                            Panel.copy(alpha = 0.97f),
-                            RoundedCornerShape(16.dp)
+                            Panel.copy(alpha = 0.98f),
+                            RoundedCornerShape(18.dp)
                         )
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -623,11 +635,11 @@ private fun GameScreen(
                     Text(
                         text = "ПАУЗА",
                         color = NeonBlue,
-                        fontSize = 26.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Black
                     )
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(14.dp))
 
                     NeonButton(
                         text = "▶ ПРОДОЛЖИТЬ",
@@ -636,19 +648,42 @@ private fun GameScreen(
                             lastFrameTime = SystemClock.elapsedRealtime()
                         }
                     )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    NeonButton(
+                        text = "В ГЛАВНОЕ МЕНЮ",
+                        onClick = onExit,
+                        color = Background
+                    )
                 }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
-        Text(
-            text = "Выбирай одну из трёх дорожек, чтобы избежать столкновения.",
-            color = Muted,
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            for (lane in 0..2) {
+                Text(
+                    text = when (lane) {
+                        0 -> "◀ ЛЕВО"
+                        1 -> "● ЦЕНТР"
+                        else -> "ПРАВО ▶"
+                    },
+                    color = if (playerLane == lane) NeonBlue else Muted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { moveToLane(lane) }
+                        .padding(vertical = 10.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
 
@@ -669,23 +704,19 @@ private fun ResultsScreen(
     ) {
         Text(
             text = "GAME OVER",
-            fontSize = 35.sp,
+            fontSize = 36.sp,
             fontWeight = FontWeight.Black,
             color = NeonPink
         )
 
         Spacer(Modifier.height(28.dp))
 
-        Text(
-            text = "ТВОЙ СЧЁТ",
-            color = Muted,
-            fontSize = 14.sp
-        )
+        Text("ТВОЙ СЧЁТ", color = Muted, fontSize = 14.sp)
 
         Text(
             text = score.toString(),
             color = NeonBlue,
-            fontSize = 56.sp,
+            fontSize = 58.sp,
             fontWeight = FontWeight.Black
         )
 
@@ -694,22 +725,19 @@ private fun ResultsScreen(
         Text(
             text = "РЕКОРД: $bestScore",
             color = NeonGreen,
-            fontSize = 18.sp,
+            fontSize = 19.sp,
             fontWeight = FontWeight.Bold
         )
 
         Spacer(Modifier.height(36.dp))
 
-        NeonButton(
-            text = "↻  ЕЩЁ РАЗ",
-            onClick = onRetry
-        )
+        NeonButton("↻  ЕЩЁ РАЗ", onRetry)
 
         Spacer(Modifier.height(14.dp))
 
         NeonButton(
-            text = "⌂  ГЛАВНОЕ МЕНЮ",
-            onClick = onHome,
+            "⌂  ГЛАВНОЕ МЕНЮ",
+            onHome,
             color = Panel
         )
     }
@@ -735,10 +763,10 @@ private fun SettingsScreen(
             text = "НАСТРОЙКИ",
             color = NeonBlue,
             fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Black
         )
 
-        Spacer(Modifier.height(35.dp))
+        Spacer(Modifier.height(32.dp))
 
         Text(
             text = "Звук: ${if (soundEnabled) "ВКЛ" else "ВЫКЛ"}",
@@ -749,16 +777,12 @@ private fun SettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         NeonButton(
-            text = if (soundEnabled) {
-                "Выключить звук"
-            } else {
-                "Включить звук"
-            },
+            text = if (soundEnabled) "ВЫКЛЮЧИТЬ ЗВУК" else "ВКЛЮЧИТЬ ЗВУК",
             onClick = { onSoundChange(!soundEnabled) },
             color = Panel
         )
 
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(28.dp))
 
         Text(
             text = "Чувствительность: $sensitivity",
@@ -777,18 +801,15 @@ private fun SettingsScreen(
         )
 
         Text(
-            text = "Низкая: переключение по одной дорожке. Высокая: мгновенный переход.",
+            text = "Низкая чувствительность ограничивает переход одной дорожкой.",
             color = Muted,
             fontSize = 12.sp,
             textAlign = TextAlign.Center
         )
 
-        Spacer(Modifier.height(35.dp))
+        Spacer(Modifier.height(32.dp))
 
-        NeonButton(
-            text = "НАЗАД",
-            onClick = onBack
-        )
+        NeonButton("НАЗАД", onBack)
     }
 }
 
@@ -815,7 +836,7 @@ private fun NeonButton(
     ) {
         Text(
             text = text,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold
         )
     }
