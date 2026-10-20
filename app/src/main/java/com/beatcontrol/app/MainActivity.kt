@@ -803,12 +803,14 @@ private fun GameScreen(
             )
 
             Slider(
-                value = bpm.toFloat(),
-                onValueChange = onBpmChange,
-                valueRange = 60f..200f,
-                steps = 139,
-                modifier = Modifier.weight(1f)
-            )
+    value = bpm.toFloat(),
+    onValueChange = { value ->
+        onBpmChange(value.toInt())
+    },
+    valueRange = 60f..200f,
+    steps = 139,
+    modifier = Modifier.weight(1f)
+)
         }
 
         Row(
