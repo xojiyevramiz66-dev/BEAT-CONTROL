@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -332,22 +333,26 @@ private fun GameScreen(
                     color = Color(0xFF0B1020),
                     shape = RoundedCornerShape(18.dp)
                 )
-                .clickable {
-                    if (!gameOver) {
-                        // Tap left or right half to change lanes.
-                        // The canvas is divided into three equal lanes.
-                        playerLane = when {
-                            playerLane == 0 -> 1
-                            playerLane == 2 -> 1
-                            else -> playerLane
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(gameOver) {
+                        detectTapGestures { offset ->
+                            if (!gameOver) {
+                                val laneWidth = size.width / 3f
+
+                                playerLane = (offset.x / laneWidth)
+                                    .toInt()
+                                    .coerceIn(0, 2)
+                            }
                         }
                     }
-                }
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            ) {
                 val laneWidth = size.width / 3f
                 val height = size.height
 
+                // Разделители трёх дорожек.
                 for (i in 1..2) {
                     val x = laneWidth * i
 
@@ -359,7 +364,7 @@ private fun GameScreen(
                     )
                 }
 
-                // Player danger zone
+                // Линия опасной зоны игрока.
                 drawLine(
                     color = NeonPink.copy(alpha = 0.5f),
                     start = Offset(0f, height * 0.88f),
@@ -367,7 +372,7 @@ private fun GameScreen(
                     strokeWidth = 1.dp.toPx()
                 )
 
-                // Player
+                // Игрок.
                 val playerX = laneWidth * (playerLane + 0.5f)
                 val playerY = height * 0.86f
 
@@ -389,7 +394,7 @@ private fun GameScreen(
                     center = Offset(playerX, playerY)
                 )
 
-                // Falling obstacles
+                // Падающие препятствия.
                 obstacles.forEach { obstacle ->
                     val centerX = laneWidth * (obstacle.lane + 0.5f)
                     val centerY = height * obstacle.y
@@ -421,7 +426,7 @@ private fun GameScreen(
                     .padding(top = 14.dp)
             )
 
-            // Three independent touch zones for precise lane control.
+            // Три независимые зоны управления внизу.
             Row(
                 modifier = Modifier
                     .fillMaxSize()
